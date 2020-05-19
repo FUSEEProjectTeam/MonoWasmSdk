@@ -1,0 +1,66 @@
+# This is a basic workflow to help you get started with Actions
+
+name: Build Mono Wasm Sdk
+
+# Controls when the action will run. Triggers the workflow on push or pull request
+# events but only for the master branch
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Setup env
+      run: echo "::add-path::$GITHUB_WORKSPACE/bin"
+      
+    - name: Print env
+      run: printenv
+
+    - name: Clone mono
+      run: git clone --depth 1 https://github.com/mono/mono
+    
+    - name: Clone dotnet/runtime
+      run: git clone --depth 1 https://github.com/dotnet/runtime
+    
+    - name: Download ninja
+      run: |
+        wget https://github.com/ninja-build/ninja/releases/download/v1.10.0/ninja-linux.zip
+        mkdir bin
+        unzip ninja-linux.zip -d bin
+        rm ninja-linux.zip
+        chmod +x bin/ninja
+
+    - name: Setup Make.config
+      run: |
+        echo "ENABLE_WASM=1" > mono/sdks/Make.config
+        echo "DOTNET_REPO_DIR=../../runtime" >> mono/sdks/Make.config
+
+    - name: make -j -C mono/sdks/builds provision-wasm
+      run: make -j -C mono/sdks/builds provision-wasm
+      
+    - name: make -j -C mono/sdks/wasm runtime
+      run: make -j -C mono/sdks/wasm runtime
+      
+    - name: make -j -C mono/sdks/wasm bcl
+      run: make -j -C mono/sdks/wasm bcl
+      
+    - name: make -j -C mono/sdks/wasm cross
+      run: make -j -C mono/sdks/wasm cross
+      
+    - name: make -j -C mono/sdks/wasm
+      run: make -j -C mono/sdks/wasm
+      
+    - name: dotnet build mono/sdks/wasm/sdk/MonoWasmSdkCLI.sln
+      run: dotnet build mono/sdks/wasm/sdk/MonoWasmSdkCLI.sln
+      
+    - name: Upload a Build Artifact
+      uses: actions/upload-artifact@v2
+      with:
+        path: mono/sdks/wasm/sdk/packages/*
